@@ -8,5 +8,5 @@ TWILIO_AUTH_TOKEN=seu_auth_token
 TWILIO_FROM_NUMBER=+11993461052
 PORT=3000
 
-Outras variáveis que você queira no futuro
+Outras variáveis
 DEBUG=true
