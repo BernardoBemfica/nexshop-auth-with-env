@@ -1,0 +1,56 @@
+### Signup (criar conta)
+POST http://localhost:3000/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "teste@example.com",
+  "password": "SenhaForte@123",
+  "phone": "11999999999",
+  "favoriteColor": "azul",
+  "birthYear": "1999"
+}
+
+### Login (credenciais)
+POST http://localhost:3000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "teste@example.com",
+  "password": "SenhaForte@123"
+}
+
+### Emitir sessão direta (apenas se action=allow)
+POST http://localhost:3000/api/auth/session/issue
+Content-Type: application/json
+
+{
+  "user": "teste@example.com"
+}
+
+### Iniciar MFA (SMS)
+POST http://localhost:3000/api/identity/challenge/start
+Content-Type: application/json
+
+{
+  "fingerprint": "fingerprint_demo_123",
+  "user": "teste@example.com"
+}
+
+### Verificar OTP
+POST http://localhost:3000/api/identity/challenge/verify-otp
+Content-Type: application/json
+
+{
+  "fingerprint": "fingerprint_demo_123",
+  "code": "000000"
+}
+
+### Verificar KBA (fallback)
+POST http://localhost:3000/api/identity/challenge/verify-kba
+Content-Type: application/json
+
+{
+  "fingerprint": "fingerprint_demo_123",
+  "answer1": "azul",
+  "answer2": "1999"
+}

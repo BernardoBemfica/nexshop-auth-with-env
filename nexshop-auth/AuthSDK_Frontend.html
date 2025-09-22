@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Nexshop Auth SDK</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@fingerprintjs/fingerprintjs@3/dist/fp.min.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background:#f3f4f6; min-height:100vh; }
+    .modal { position: fixed; inset: 0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.4); }
+    .modal.open { display:flex; }
+    .link { color:#4f46e5; text-decoration:underline; cursor:pointer; }
+    .muted { color:#6b7280; }
+    .token { word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  </style>
+</head>
+<body class="flex items-center justify-center p-4">
+  <!-- LOGIN -->
+  <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full" id="cardLogin">
+    <h1 class="text-2xl font-bold mb-2 text-gray-800">Nexshop Auth SDK</h1>
+    <p class="text-gray-600 mb-6">Login com verificação de risco e MFA por SMS.</p>
+
+    <div class="space-y-3 mb-2">
+      <div>
+        <label class="block text-sm text-gray-700">E-mail</label>
+        <input id="user" class="w-full border rounded-md p-2" type="email" autocomplete="username" placeholder="email@dominio.com">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700">Senha</label>
+        <input id="pass" class="w-full border rounded-md p-2" type="password" autocomplete="current-password" placeholder="••••••••">
+      </div>
+    </div>
+
+    <div class="text-sm text-gray-600 mb-4">
+      Não tem conta? <span id="openSignup" class="link">Criar conta</span>
+    </div>
+
+    <div class="mb-4 text-left">
+      <h2 class="text-xl font-semibold mb-2 text-gray-700">Dados Coletados</h2>
+      <div id="dataOutput" class="bg-gray-100 p-4 rounded-md overflow-auto text-sm text-gray-800" style="max-height:200px;">
+        <p class="text-gray-500">Clique em Login para coletar os dados...</p>
+      </div>
+    </div>
+
+    <button id="loginBtn" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700 transition-colors">
+      Login
+    </button>
+
+    <div id="resultOutput" class="mt-6 p-4 rounded-md">
+      <p class="font-bold">Resultado:</p>
+      <p id="status" class="mt-2 text-gray-700"></p>
+      <p id="score" class="mt-1 text-gray-700"></p>
+      <p id="serverMeta" class="mt-1 text-gray-500 text-xs"></p>
+      <p id="sessionOut" class="mt-2 text-green-700 text-sm hidden">Sessão: <span class="token" id="sessionToken"></span></p>
+    </div>
+  </div>
+
+  <!-- SIGNUP -->
+  <div class="bg-white p-8 rounded-lg shadow-lg max-w-md w-full hidden" id="cardSignup">
+    <h2 class="text-2xl font-bold mb-2 text-gray-800">Criar conta</h2>
+    <p class="text-gray-600 mb-6">Cadastre e-mail, senha e telefone. As perguntas abaixo serão usadas se o SMS não chegar.</p>
+
+    <div class="space-y-3 mb-4">
+      <div>
+        <label class="block text-sm text-gray-700">E-mail</label>
+        <input id="suEmail" class="w-full border rounded-md p-2" type="email" placeholder="email@dominio.com">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700">Senha</label>
+        <input id="suPass" class="w-full border rounded-md p-2" type="password" placeholder="••••••••">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700">Telefone (apenas números)</label>
+        <input id="suPhone" class="w-full border rounded-md p-2" type="tel" placeholder="Ex.: 11991234567">
+        <p class="text-xs muted mt-1">Não precisa colocar +55. Digite só números (DDD+numero).</p>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700">Cor favorita (KBA)</label>
+        <input id="suFavColor" class="w-full border rounded-md p-2" placeholder="ex.: azul">
+      </div>
+      <div>
+        <label class="block text-sm text-gray-700">Ano de nascimento (KBA)</label>
+        <input id="suBirthYear" class="w-full border rounded-md p-2" type="number" placeholder="ex.: 1999" min="1900" max="2100">
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button id="signupBtn" class="flex-1 bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700">Cadastrar</button>
+      <button id="backToLogin" class="flex-1 border py-2 px-4 rounded-md">Voltar</button>
+    </div>
+
+    <p id="signupMsg" class="text-sm text-gray-600 mt-3"></p>
+  </div>
+
+  <!-- MODAL MFA -->
+  <div id="mfaModal" class="modal">
+    <div class="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm">
+      <h3 class="text-lg font-semibold mb-2">Confirmação por SMS</h3>
+      <p class="text-sm text-gray-600">Enviamos um código de 6 dígitos para seu telefone.</p>
+
+      <input id="otpInput" class="mt-3 w-full border rounded-md p-2 tracking-widest text-center text-lg" maxlength="6" placeholder="000000">
+
+      <div class="flex justify-between items-center mt-4 gap-2">
+        <button id="otpCancel" class="px-3 py-2 rounded-md border">Cancelar</button>
+        <button id="resendBtn" class="px-3 py-2 rounded-md border" disabled>Reenviar código <span id="resendCountdown" class="muted"></span></button>
+        <button id="otpConfirm" class="px-4 py-2 rounded-md bg-indigo-600 text-white font-semibold">Verificar</button>
+      </div>
+
+      <details class="mt-3">
+        <summary class="cursor-pointer text-sm text-gray-700">Não recebi o código — responder perguntas</summary>
+        <div class="mt-2 text-sm">
+          <input id="kba1" class="w-full border rounded-md p-2 mb-2" placeholder="Qual é sua cor favorita?">
+          <input id="kba2" class="w-full border rounded-md p-2" placeholder="Em que ano você nasceu?">
+          <button id="kbaConfirm" class="mt-3 px-4 py-2 rounded-md bg-amber-500 text-white font-semibold">Verificar KBA</button>
+        </div>
+      </details>
+
+      <p id="otpMsg" class="text-sm mt-3 text-gray-600"></p>
+    </div>
+  </div>
+
+  <script>
+    const ep = {
+      signup: '/api/auth/signup',
+      login: '/api/auth/login',
+      issue: '/api/auth/session/issue',
+      verify: '/api/identity/verify',
+      start: '/api/identity/challenge/start',
+      resend: '/api/identity/challenge/resend',
+      otp: '/api/identity/challenge/verify-otp',
+      kba: '/api/identity/challenge/verify-kba',
+    };
+
+    // troca de telas
+    const cardLogin = document.getElementById('cardLogin');
+    const cardSignup = document.getElementById('cardSignup');
+    document.getElementById('openSignup').onclick = () => { cardLogin.classList.add('hidden'); cardSignup.classList.remove('hidden'); };
+    document.getElementById('backToLogin').onclick = () => { cardSignup.classList.add('hidden'); cardLogin.classList.remove('hidden'); };
+
+    // sinais comportamento/ambiente
+    let mouseMovements = 0, startTime = Date.now(), keyTimes = [], pastedPassword = false, hiddenCount = 0;
+    document.addEventListener('mousemove', () => { mouseMovements++; });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) hiddenCount++; });
+    const passEl = document.getElementById('pass');
+    if (passEl) {
+      passEl.addEventListener('keydown', () => keyTimes.push(Date.now()));
+      passEl.addEventListener('paste', () => { pastedPassword = true; });
+    }
+
+    function getAvgKeystrokeMs(times) {
+      if (times.length < 2) return null;
+      let d=0; for (let i=1;i<times.length;i++) d+=(times[i]-times[i-1]); return Math.round(d/(times.length-1));
+    }
+    function getEnv() {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+      const lang = navigator.language || (navigator.languages && navigator.languages[0]) || null;
+      const mem = navigator.deviceMemory || null;
+      const hwc = navigator.hardwareConcurrency || null;
+      const screenRes = `${window.screen.width}x${window.screen.height}`;
+      const webdriver = !!navigator.webdriver;
+      const headlessHints = (navigator.plugins?.length === 0) || (navigator.languages?.length === 0);
+      const localHour = new Date().getHours();
+      return { tz, lang, mem, hwc, screenRes, webdriver, headlessHints, localHour };
+    }
+
+    // estado
+    let currentFingerprint = null, currentUserEmail = null, sessionToken = null;
+
+    function openModal() { document.getElementById('mfaModal').classList.add('open'); startResendCooldown(30); }
+    function closeModal() {
+      document.getElementById('mfaModal').classList.remove('open');
+      document.getElementById('otpInput').value = '';
+      document.getElementById('otpMsg').textContent = '';
+      stopResendCooldown();
+    }
+
+    // SIGNUP
+    document.getElementById('signupBtn').addEventListener('click', async () => {
+      const email = document.getElementById('suEmail').value.trim();
+      const password = document.getElementById('suPass').value.trim();
+      const phone = document.getElementById('suPhone').value.trim(); // só números
+      const favoriteColor = document.getElementById('suFavColor').value.trim();
+      const birthYear = document.getElementById('suBirthYear').value.trim();
+      const msg = document.getElementById('signupMsg');
+      msg.textContent = 'Cadastrando...';
+      try {
+        const r = await fetch(ep.signup, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email, password, phone, favoriteColor, birthYear })});
+        const data = await r.json();
+        if (data.ok) { msg.textContent = '✅ Conta criada! Faça login.'; setTimeout(()=>{ cardSignup.classList.add('hidden'); cardLogin.classList.remove('hidden'); }, 800); }
+        else { msg.textContent = 'Erro: ' + (data.error || 'falha no cadastro'); }
+      } catch { msg.textContent = 'Erro de rede.'; }
+    });
+
+    // LOGIN + VERIFICAÇÃO
+    document.getElementById('loginBtn').addEventListener('click', loginHandler);
+    async function loginHandler() {
+      const out = {
+        data: document.getElementById('dataOutput'),
+        result: document.getElementById('resultOutput'),
+        status: document.getElementById('status'),
+        score: document.getElementById('score'),
+        meta: document.getElementById('serverMeta'),
+        sessionRow: document.getElementById('sessionOut'),
+        sessionToken: document.getElementById('sessionToken'),
+      };
+      const email = document.getElementById('user').value.trim();
+      const password = document.getElementById('pass').value;
+
+      out.status.textContent = out.score.textContent = out.meta.textContent = '';
+      out.sessionRow.classList.add('hidden'); out.sessionToken.textContent = '';
+      out.result.style.backgroundColor = 'transparent';
+      out.data.innerHTML = '<p class="text-gray-500">Coletando dados...</p>';
+
+      try {
+        // 1) valida credenciais
+        const rLogin = await fetch(ep.login, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ email, password })});
+        const loginData = await rLogin.json();
+        if (!rLogin.ok || !loginData.ok) { out.status.textContent = 'Credenciais inválidas.'; out.result.style.backgroundColor='#fee2e2'; return; }
+
+        // 2) fingerprint + sinais
+        const timeOnPage = Math.floor((Date.now() - startTime)/1000);
+        const fp = await FingerprintJS.load(); const result = await fp.get();
+        currentFingerprint = result.visitorId; currentUserEmail = email;
+
+        const sessionData = {
+          fingerprint: currentFingerprint,
+          behavior: { timeOnPage, mouseMovements, hiddenCount, avgKeystrokeMs: getAvgKeystrokeMs(keyTimes), pastedPassword },
+          env: getEnv(),
+          user: email
+        };
+        out.data.textContent = JSON.stringify(sessionData, null, 2);
+
+        // 3) antifraude
+        const rVerify = await fetch(ep.verify, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(sessionData) });
+        const v = await rVerify.json();
+        out.status.textContent = `Ação: ${v.action}`; out.score.textContent = `Score de Risco: ${v.score}`;
+        out.meta.textContent = `IP: ${v.metadata?.server_ip || '-'} • UA: ${v.metadata?.ua_hash?.slice(0,12)}…`;
+
+        if (v.action === 'deny') { out.result.style.backgroundColor = '#fee2e2'; alert('Acesso negado.'); return; }
+
+        if (v.action === 'allow') {
+          // emite sessão imediata no back
+          const rIssue = await fetch(ep.issue, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ user: email }) });
+          const d = await rIssue.json();
+          if (d.ok) {
+            sessionToken = d.sessionToken;
+            out.result.style.backgroundColor = '#d1fae5';
+            out.sessionRow.classList.remove('hidden'); out.sessionToken.textContent = sessionToken;
+            alert('Login concluído (sem MFA).');
+          } else {
+            out.result.style.backgroundColor = '#fee2e2';
+            out.status.textContent = 'Falha ao emitir sessão.';
+          }
+          return;
+        }
+
+        // v.action = 'mfa' ou 'review' -> inicia desafio
+        out.result.style.backgroundColor = (v.action === 'mfa') ? '#e0e7ff' : '#fef3c7';
+        const start = await fetch(ep.start, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fingerprint: currentFingerprint, user: currentUserEmail }) });
+        if (start.status === 429) {
+          const j = await start.json(); document.getElementById('otpMsg').textContent = j.error === 'cooldown' ? `Aguarde ${j.waitSec}s para reenviar.` : 'Aguarde um pouco…';
+        } else {
+          document.getElementById('otpMsg').textContent = 'Enviamos um SMS. Se não chegar, reenvie ou responda as perguntas.';
+        }
+        openModal();
+
+        // reset sensíveis por tentativa
+        keyTimes = []; pastedPassword = false;
+
+      } catch (e) {
+        console.error(e);
+        document.getElementById('status').textContent = "Erro de rede.";
+        out.result.style.backgroundColor = '#fee2e2';
+      }
+    }
+
+    // MFA: OTP / RESEND / KBA
+    document.getElementById('otpCancel').addEventListener('click', () => closeModal());
+    document.getElementById('otpConfirm').addEventListener('click', verifyOtp);
+    document.getElementById('kbaConfirm').addEventListener('click', verifyKba);
+    document.getElementById('resendBtn').addEventListener('click', resendOtp);
+
+    async function verifyOtp() {
+      const code = document.getElementById('otpInput').value.trim();
+      const r = await fetch(ep.otp, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fingerprint: currentFingerprint, code }) });
+      const data = await r.json();
+      if (data.ok) {
+        sessionToken = data.sessionToken;
+        document.getElementById('otpMsg').textContent = '✅ Verificado! Login concluído.';
+        document.getElementById('sessionOut').classList.remove('hidden');
+        document.getElementById('sessionToken').textContent = sessionToken;
+        setTimeout(closeModal, 800);
+      } else {
+        const msg = document.getElementById('otpMsg');
+        if (data.reason === 'expired') msg.textContent = '⏱️ Código expirado. Reenvie.';
+        else if (data.reason === 'too-many-attempts') msg.textContent = 'Muitas tentativas. Aguarde alguns minutos e reenvie.';
+        else if (data.reason === 'locked') msg.textContent = 'Bloqueado temporariamente.';
+        else if (data.reason === 'bad-request') msg.textContent = 'Informe o código.';
+        else msg.textContent = 'Código inválido.';
+      }
+    }
+
+    async function verifyKba() {
+      const a1 = document.getElementById('kba1').value;
+      const a2 = document.getElementById('kba2').value;
+      const r = await fetch(ep.kba, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fingerprint: currentFingerprint, answer1: a1, answer2: a2 }) });
+      const data = await r.json();
+      if (data.ok) {
+        sessionToken = data.sessionToken;
+        document.getElementById('otpMsg').textContent = '✅ Verificado via perguntas! Login concluído.';
+        document.getElementById('sessionOut').classList.remove('hidden');
+        document.getElementById('sessionToken').textContent = sessionToken;
+        setTimeout(closeModal, 800);
+      } else {
+        document.getElementById('otpMsg').textContent = 'Respostas incorretas.';
+      }
+    }
+
+    let resendTimer = null;
+    function startResendCooldown(seconds) {
+      const btn = document.getElementById('resendBtn');
+      const cd = document.getElementById('resendCountdown');
+      let t = seconds; btn.disabled = true; cd.textContent = `(${t}s)`;
+      resendTimer = setInterval(() => { t--; if (t<=0){ stopResendCooldown(); return; } cd.textContent = `(${t}s)`; }, 1000);
+    }
+    function stopResendCooldown() {
+      const btn = document.getElementById('resendBtn');
+      const cd = document.getElementById('resendCountdown');
+      if (resendTimer) clearInterval(resendTimer); resendTimer=null; btn.disabled=false; cd.textContent='';
+    }
+    async function resendOtp() {
+      document.getElementById('otpMsg').textContent = 'Reenviando...';
+      const r = await fetch(ep.start, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fingerprint: currentFingerprint, user: currentUserEmail }) });
+      const data = await r.json();
+      if (r.ok) {
+        document.getElementById('otpMsg').textContent = 'Novo SMS enviado.';
+        startResendCooldown(data.cooldownSec || 30);
+      } else {
+        if (data.error === 'cooldown') document.getElementById('otpMsg').textContent = `Aguarde ${data.waitSec}s para reenviar.`;
+        else if (data.error === 'too-many-resends') document.getElementById('otpMsg').textContent = 'Muitos reenvios. Tente mais tarde.';
+        else if (data.error === 'locked') document.getElementById('otpMsg').textContent = 'Bloqueado temporariamente.';
+        else document.getElementById('otpMsg').textContent = 'Não foi possível reenviar agora.';
+        startResendCooldown(30);
+      }
+    }
+  </script>
+</body>
+</html>
